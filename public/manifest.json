@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Local Translator",
+  "version": "0.1.0",
+  "description": "Local streaming translation for X and the wider web with oMLX.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*", "https://x.com/*", "https://twitter.com/*", "http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Local Translator"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

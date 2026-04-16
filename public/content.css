@@ -1,0 +1,202 @@
+.local-translator-block {
+  --lt-accent: 255, 178, 102;
+  --lt-sheen: linear-gradient(
+    110deg,
+    rgba(var(--lt-accent), 0) 0%,
+    rgba(var(--lt-accent), 0.12) 20%,
+    rgba(var(--lt-accent), 0.28) 50%,
+    rgba(var(--lt-accent), 0.12) 80%,
+    rgba(var(--lt-accent), 0) 100%
+  );
+  position: relative;
+  display: grid;
+  isolation: isolate;
+}
+
+.local-translator-block > .lt-original,
+.local-translator-block > .lt-translated {
+  grid-area: 1 / 1;
+  display: block;
+  align-self: start;
+  justify-self: stretch;
+  white-space: pre-wrap;
+  transition:
+    opacity 280ms cubic-bezier(0.4, 0, 0.2, 1),
+    filter 350ms cubic-bezier(0.4, 0, 0.2, 1),
+    letter-spacing 350ms cubic-bezier(0.4, 0, 0.2, 1),
+    transform 350ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.local-translator-block > .lt-original {
+  color: inherit;
+}
+
+.local-translator-block > .lt-translated {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* --- streaming: show translated layer, hide original --- */
+
+.local-translator-block.has-translation > .lt-original {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.local-translator-block.has-translation > .lt-translated {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* --- translating: blurred text with shimmer overlay --- */
+
+.local-translator-block.is-translating > .lt-translated {
+  filter: blur(4px) saturate(1.1);
+  letter-spacing: 0.03em;
+  transform: scale(1);
+  animation: lt-text-pulse 2s ease-in-out infinite;
+}
+
+.local-translator-block.is-translating::after {
+  content: "";
+  position: absolute;
+  inset: -0.15em -0.3em;
+  pointer-events: none;
+  border-radius: 10px;
+  background: var(--lt-sheen);
+  background-size: 200% 100%;
+  mix-blend-mode: screen;
+  opacity: 0.6;
+  animation: lt-shimmer 1.8s ease-in-out infinite;
+}
+
+.local-translator-block.is-translating::before {
+  content: "";
+  position: absolute;
+  inset: -0.1em;
+  pointer-events: none;
+  border-radius: 10px;
+  border: 1px solid rgba(var(--lt-accent), 0.15);
+  opacity: 0;
+  animation: lt-border-glow 1.8s ease-in-out infinite;
+}
+
+/* --- translation complete: focus-in reveal --- */
+
+.local-translator-block.lt-done > .lt-translated {
+  animation: lt-focus-in 400ms cubic-bezier(0.2, 0, 0.2, 1) forwards;
+}
+
+.local-translator-block.lt-done::after {
+  content: "";
+  position: absolute;
+  inset: -0.1em;
+  pointer-events: none;
+  border-radius: 10px;
+  background: rgba(var(--lt-accent), 0.12);
+  animation: lt-flash 600ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* --- failed state --- */
+
+.local-translator-block.lt-failed::after {
+  content: "";
+  position: absolute;
+  inset: -0.08em;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 122, 122, 0.24);
+  pointer-events: none;
+}
+
+/* --- keyframes --- */
+
+@keyframes lt-shimmer {
+  0% {
+    background-position: 120% center;
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    background-position: -120% center;
+    opacity: 0.3;
+  }
+}
+
+@keyframes lt-text-pulse {
+  0%,
+  100% {
+    filter: blur(4px) saturate(1.1);
+  }
+  50% {
+    filter: blur(2.5px) saturate(1.2);
+  }
+}
+
+@keyframes lt-border-glow {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes lt-focus-in {
+  0% {
+    filter: blur(3px);
+    opacity: 0.7;
+  }
+  100% {
+    filter: blur(0);
+    opacity: 1;
+  }
+}
+
+@keyframes lt-flash {
+  0% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.15;
+    transform: scale(1.01);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+/* --- reduced motion --- */
+
+@media (prefers-reduced-motion: reduce) {
+  .local-translator-block > .lt-original,
+  .local-translator-block > .lt-translated {
+    transition: opacity 150ms ease;
+  }
+
+  .local-translator-block.is-translating > .lt-translated {
+    filter: none;
+    letter-spacing: normal;
+    transform: none;
+    animation: none;
+  }
+
+  .local-translator-block.is-translating::after,
+  .local-translator-block.is-translating::before {
+    animation: none;
+    opacity: 0.12;
+  }
+
+  .local-translator-block.lt-done > .lt-translated {
+    animation: none;
+  }
+
+  .local-translator-block.lt-done::after {
+    animation: none;
+    opacity: 0;
+  }
+}
