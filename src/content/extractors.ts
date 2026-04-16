@@ -123,15 +123,13 @@ function collectBlocks(
 
 export function extractGenericBlocks(document: Document): CandidateBlock[] {
   const roots = Array.from(
-    document.querySelectorAll<HTMLElement>("main, article")
+    document.querySelectorAll<HTMLElement>("main, article, [role='main']")
   );
 
-  if (roots.length === 0) {
-    return [];
-  }
+  const searchRoot = roots.length > 0 ? roots : [document.body];
 
   const elements = new Set<HTMLElement>();
-  for (const root of roots) {
+  for (const root of searchRoot) {
     root
       .querySelectorAll<HTMLElement>(GENERIC_SELECTOR)
       .forEach((element) => elements.add(element));
