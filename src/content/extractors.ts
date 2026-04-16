@@ -163,11 +163,35 @@ function isTextLeaf(element: HTMLElement, minLength: number): boolean {
   return true;
 }
 
-const CONTAINER_TAGS = new Set([
+const STRUCTURAL_TAGS = new Set([
   "HTML", "BODY", "MAIN", "ARTICLE", "SECTION", "HEADER", "FOOTER",
-  "DIV", "FORM", "FIELDSET", "DETAILS", "DIALOG", "SEARCH",
+  "FORM", "FIELDSET", "DETAILS", "DIALOG", "SEARCH",
   "UL", "OL", "DL", "TABLE", "THEAD", "TBODY", "TFOOT", "TR"
 ]);
+
+function isLayoutContainer(element: HTMLElement, minLength: number): boolean {
+  if (STRUCTURAL_TAGS.has(element.tagName)) {
+    return true;
+  }
+
+  if (element.tagName !== "DIV") {
+    return false;
+  }
+
+  // A div is a layout container if it has multiple children with substantial text
+  let substantialChildren = 0;
+  for (const child of element.children) {
+    const childText = normalizeSourceText(child.textContent ?? "");
+    if (childText.length >= minLength) {
+      substantialChildren += 1;
+      if (substantialChildren >= 2) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 function walkTextLeaves(
   root: HTMLElement,
@@ -178,27 +202,15 @@ function walkTextLeaves(
     return;
   }
 
-  const isContainer = CONTAINER_TAGS.has(root.tagName);
+  const container = isLayoutContainer(root, minLength);
 
-  if (!isContainer && isTextLeaf(root, minLength)) {
+  if (!container && isTextLeaf(root, minLength)) {
     results.add(root);
     return;
   }
 
-  if (isContainer || root.children.length > 0) {
-    // For containers or elements with children that aren't text leaves,
-    // check if the element itself has significant direct text nodes
-    if (!isContainer && hasDirectText(root)) {
-      const text = normalizeSourceText(root.textContent ?? "");
-      if (text.length >= minLength) {
-        results.add(root);
-        // Still walk children to find additional nested blocks
-      }
-    }
-
-    for (const child of root.children) {
-      walkTextLeaves(child as HTMLElement, minLength, results);
-    }
+  for (const child of root.children) {
+    walkTextLeaves(child as HTMLElement, minLength, results);
   }
 }
 
