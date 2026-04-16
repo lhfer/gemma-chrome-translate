@@ -5,7 +5,7 @@ export interface CandidateBlock {
   text: string;
 }
 
-const GENERIC_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, blockquote";
+const SEMANTIC_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, figcaption, dt, dd";
 const SKIP_SELECTOR = [
   "input",
   "textarea",
@@ -15,7 +15,16 @@ const SKIP_SELECTOR = [
   "aside",
   "menu",
   "code",
-  "pre"
+  "pre",
+  "script",
+  "style",
+  "svg",
+  "img",
+  "video",
+  "audio",
+  "canvas",
+  "iframe",
+  "noscript"
 ].join(", ");
 
 const X_LONGFORM_SKIP_SELECTOR = [
@@ -121,18 +130,113 @@ function collectBlocks(
   return blocks;
 }
 
+function hasDirectText(element: HTMLElement): boolean {
+  for (const node of element.childNodes) {
+    if (node.nodeType === Node.TEXT_NODE && node.textContent && node.textContent.trim().length > 2) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isTextLeaf(element: HTMLElement, minLength: number): boolean {
+  const text = normalizeSourceText(element.textContent ?? "");
+  if (!text || text.length < minLength) {
+    return false;
+  }
+
+  if (element.matches(SKIP_SELECTOR) || element.closest(SKIP_SELECTOR)) {
+    return false;
+  }
+
+  const children = Array.from(element.children) as HTMLElement[];
+  for (const child of children) {
+    if (child.matches(SKIP_SELECTOR)) {
+      continue;
+    }
+    const childText = normalizeSourceText(child.textContent ?? "");
+    if (childText.length >= minLength && childText.length >= text.length * 0.7) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+const CONTAINER_TAGS = new Set([
+  "HTML", "BODY", "MAIN", "ARTICLE", "SECTION", "HEADER", "FOOTER",
+  "DIV", "FORM", "FIELDSET", "DETAILS", "DIALOG", "SEARCH",
+  "UL", "OL", "DL", "TABLE", "THEAD", "TBODY", "TFOOT", "TR"
+]);
+
+function walkTextLeaves(
+  root: HTMLElement,
+  minLength: number,
+  results: Set<HTMLElement>
+): void {
+  if (root.matches(SKIP_SELECTOR)) {
+    return;
+  }
+
+  const isContainer = CONTAINER_TAGS.has(root.tagName);
+
+  if (!isContainer && isTextLeaf(root, minLength)) {
+    results.add(root);
+    return;
+  }
+
+  if (isContainer || root.children.length > 0) {
+    // For containers or elements with children that aren't text leaves,
+    // check if the element itself has significant direct text nodes
+    if (!isContainer && hasDirectText(root)) {
+      const text = normalizeSourceText(root.textContent ?? "");
+      if (text.length >= minLength) {
+        results.add(root);
+        // Still walk children to find additional nested blocks
+      }
+    }
+
+    for (const child of root.children) {
+      walkTextLeaves(child as HTMLElement, minLength, results);
+    }
+  }
+}
+
 export function extractGenericBlocks(document: Document): CandidateBlock[] {
-  const roots = Array.from(
+  const semanticRoots = Array.from(
     document.querySelectorAll<HTMLElement>("main, article, [role='main']")
   );
 
-  const searchRoot = roots.length > 0 ? roots : [document.body];
-
   const elements = new Set<HTMLElement>();
-  for (const root of searchRoot) {
+
+  // Phase 1: semantic elements from scoped roots (high confidence)
+  const scopedRoots = semanticRoots.length > 0 ? semanticRoots : [document.body];
+  for (const root of scopedRoots) {
     root
-      .querySelectorAll<HTMLElement>(GENERIC_SELECTOR)
-      .forEach((element) => elements.add(element));
+      .querySelectorAll<HTMLElement>(SEMANTIC_SELECTOR)
+      .forEach((el) => elements.add(el));
+  }
+
+  // Phase 2: walk for text leaves on the whole body (catches divs/spans with text)
+  walkTextLeaves(document.body, 20, elements);
+
+  // Deduplicate: remove ancestors whose text is fully covered by a descendant already in the set
+  const toRemove = new Set<HTMLElement>();
+  for (const el of elements) {
+    let parent = el.parentElement;
+    while (parent && parent !== document.body) {
+      if (elements.has(parent)) {
+        const parentText = normalizeSourceText(parent.textContent ?? "");
+        const childText = normalizeSourceText(el.textContent ?? "");
+        if (childText.length >= parentText.length * 0.7) {
+          toRemove.add(parent);
+        }
+      }
+      parent = parent.parentElement;
+    }
+  }
+  for (const el of toRemove) {
+    elements.delete(el);
   }
 
   return collectBlocks(elements);
