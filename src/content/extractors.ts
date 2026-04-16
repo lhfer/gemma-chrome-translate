@@ -24,8 +24,28 @@ const SKIP_SELECTOR = [
   "audio",
   "canvas",
   "iframe",
-  "noscript"
+  "noscript",
+  "label",
+  "select",
+  "option",
+  "[role='navigation']",
+  "[role='toolbar']",
+  "[role='tablist']",
+  "[role='tab']",
+  "[role='banner']",
+  "[role='complementary']",
+  "[role='menubar']",
+  "[role='menu']",
+  "[role='menuitem']",
+  "[role='button']",
+  "[role='search']",
+  "[role='alert']",
+  "[role='status']",
+  "[role='tooltip']",
+  "[aria-label]"
 ].join(", ");
+
+const GENERIC_MIN_LENGTH = 50;
 
 const X_LONGFORM_SKIP_SELECTOR = [
   "[data-testid='User-Name']",
@@ -139,6 +159,26 @@ function hasDirectText(element: HTMLElement): boolean {
   return false;
 }
 
+function isLikelyUiElement(element: HTMLElement, text: string): boolean {
+  // Short anchor text is almost always navigation/action, not content
+  if (element.tagName === "A" && text.length < 80) {
+    return true;
+  }
+
+  // Elements with interactive ancestor that isn't a content container
+  if (element.closest("a, [role='link']") && text.length < 80) {
+    return true;
+  }
+
+  // Common UI word count: 1-4 words are usually labels/buttons
+  const wordCount = text.split(/\s+/).length;
+  if (wordCount <= 4 && text.length < 60) {
+    return true;
+  }
+
+  return false;
+}
+
 function isTextLeaf(element: HTMLElement, minLength: number): boolean {
   const text = normalizeSourceText(element.textContent ?? "");
   if (!text || text.length < minLength) {
@@ -205,8 +245,11 @@ function walkTextLeaves(
   const container = isLayoutContainer(root, minLength);
 
   if (!container && isTextLeaf(root, minLength)) {
-    results.add(root);
-    return;
+    const text = normalizeSourceText(root.textContent ?? "");
+    if (!isLikelyUiElement(root, text)) {
+      results.add(root);
+      return;
+    }
   }
 
   for (const child of root.children) {
@@ -230,7 +273,8 @@ export function extractGenericBlocks(document: Document): CandidateBlock[] {
   }
 
   // Phase 2: walk for text leaves on the whole body (catches divs/spans with text)
-  walkTextLeaves(document.body, 20, elements);
+  // Higher threshold to skip short UI labels, nav items, buttons
+  walkTextLeaves(document.body, GENERIC_MIN_LENGTH, elements);
 
   // Deduplicate: remove ancestors whose text is fully covered by a descendant already in the set
   const toRemove = new Set<HTMLElement>();
