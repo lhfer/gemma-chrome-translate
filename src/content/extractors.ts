@@ -45,7 +45,9 @@ const SKIP_SELECTOR = [
   "[aria-label]"
 ].join(", ");
 
-const GENERIC_MIN_LENGTH = 50;
+// When no semantic root (<main>, <article>) exists, only extract these
+// high-confidence content tags to avoid grabbing navigation/UI
+const FALLBACK_SELECTOR = "p, blockquote";
 
 const X_LONGFORM_SKIP_SELECTOR = [
   "[data-testid='User-Name']",
@@ -150,113 +152,6 @@ function collectBlocks(
   return blocks;
 }
 
-function hasDirectText(element: HTMLElement): boolean {
-  for (const node of element.childNodes) {
-    if (node.nodeType === Node.TEXT_NODE && node.textContent && node.textContent.trim().length > 2) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function isLikelyUiElement(element: HTMLElement, text: string): boolean {
-  // Short anchor text is almost always navigation/action, not content
-  if (element.tagName === "A" && text.length < 80) {
-    return true;
-  }
-
-  // Elements with interactive ancestor that isn't a content container
-  if (element.closest("a, [role='link']") && text.length < 80) {
-    return true;
-  }
-
-  // Common UI word count: 1-4 words are usually labels/buttons
-  const wordCount = text.split(/\s+/).length;
-  if (wordCount <= 4 && text.length < 60) {
-    return true;
-  }
-
-  return false;
-}
-
-function isTextLeaf(element: HTMLElement, minLength: number): boolean {
-  const text = normalizeSourceText(element.textContent ?? "");
-  if (!text || text.length < minLength) {
-    return false;
-  }
-
-  if (element.matches(SKIP_SELECTOR) || element.closest(SKIP_SELECTOR)) {
-    return false;
-  }
-
-  const children = Array.from(element.children) as HTMLElement[];
-  for (const child of children) {
-    if (child.matches(SKIP_SELECTOR)) {
-      continue;
-    }
-    const childText = normalizeSourceText(child.textContent ?? "");
-    if (childText.length >= minLength && childText.length >= text.length * 0.7) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-const STRUCTURAL_TAGS = new Set([
-  "HTML", "BODY", "MAIN", "ARTICLE", "SECTION", "HEADER", "FOOTER",
-  "FORM", "FIELDSET", "DETAILS", "DIALOG", "SEARCH",
-  "UL", "OL", "DL", "TABLE", "THEAD", "TBODY", "TFOOT", "TR"
-]);
-
-function isLayoutContainer(element: HTMLElement, minLength: number): boolean {
-  if (STRUCTURAL_TAGS.has(element.tagName)) {
-    return true;
-  }
-
-  if (element.tagName !== "DIV") {
-    return false;
-  }
-
-  // A div is a layout container if it has multiple children with substantial text
-  let substantialChildren = 0;
-  for (const child of element.children) {
-    const childText = normalizeSourceText(child.textContent ?? "");
-    if (childText.length >= minLength) {
-      substantialChildren += 1;
-      if (substantialChildren >= 2) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-function walkTextLeaves(
-  root: HTMLElement,
-  minLength: number,
-  results: Set<HTMLElement>
-): void {
-  if (root.matches(SKIP_SELECTOR)) {
-    return;
-  }
-
-  const container = isLayoutContainer(root, minLength);
-
-  if (!container && isTextLeaf(root, minLength)) {
-    const text = normalizeSourceText(root.textContent ?? "");
-    if (!isLikelyUiElement(root, text)) {
-      results.add(root);
-      return;
-    }
-  }
-
-  for (const child of root.children) {
-    walkTextLeaves(child as HTMLElement, minLength, results);
-  }
-}
-
 export function extractGenericBlocks(document: Document): CandidateBlock[] {
   const semanticRoots = Array.from(
     document.querySelectorAll<HTMLElement>("main, article, [role='main']")
@@ -264,35 +159,19 @@ export function extractGenericBlocks(document: Document): CandidateBlock[] {
 
   const elements = new Set<HTMLElement>();
 
-  // Phase 1: semantic elements from scoped roots (high confidence)
-  const scopedRoots = semanticRoots.length > 0 ? semanticRoots : [document.body];
-  for (const root of scopedRoots) {
-    root
-      .querySelectorAll<HTMLElement>(SEMANTIC_SELECTOR)
-      .forEach((el) => elements.add(el));
-  }
-
-  // Phase 2: walk for text leaves on the whole body (catches divs/spans with text)
-  // Higher threshold to skip short UI labels, nav items, buttons
-  walkTextLeaves(document.body, GENERIC_MIN_LENGTH, elements);
-
-  // Deduplicate: remove ancestors whose text is fully covered by a descendant already in the set
-  const toRemove = new Set<HTMLElement>();
-  for (const el of elements) {
-    let parent = el.parentElement;
-    while (parent && parent !== document.body) {
-      if (elements.has(parent)) {
-        const parentText = normalizeSourceText(parent.textContent ?? "");
-        const childText = normalizeSourceText(el.textContent ?? "");
-        if (childText.length >= parentText.length * 0.7) {
-          toRemove.add(parent);
-        }
-      }
-      parent = parent.parentElement;
+  if (semanticRoots.length > 0) {
+    // Scoped mode: semantic roots exist, search full selector within them
+    for (const root of semanticRoots) {
+      root
+        .querySelectorAll<HTMLElement>(SEMANTIC_SELECTOR)
+        .forEach((el) => elements.add(el));
     }
-  }
-  for (const el of toRemove) {
-    elements.delete(el);
+  } else {
+    // Fallback mode: no semantic roots — only extract high-confidence
+    // content tags (p, blockquote) to avoid grabbing navigation/UI
+    document.body
+      .querySelectorAll<HTMLElement>(FALLBACK_SELECTOR)
+      .forEach((el) => elements.add(el));
   }
 
   return collectBlocks(elements);
