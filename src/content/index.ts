@@ -49,11 +49,23 @@ let runtimeContext: RuntimeContext | null = null;
 let intersectionObserver: IntersectionObserver | null = null;
 let mutationObserver: MutationObserver | null = null;
 let scanTimer: number | undefined;
+let contextInvalidated = false;
 const shortcutState = createShortcutState();
+
+function isContextValid(): boolean {
+  try {
+    return !contextInvalidated && Boolean(chrome.runtime?.id);
+  } catch {
+    contextInvalidated = true;
+    return false;
+  }
+}
 
 function isPageActive(): boolean {
   return Boolean(
-    runtimeContext && isTranslationViewActive(runtimeContext.enabled, runtimeContext.viewMode)
+    isContextValid() &&
+    runtimeContext &&
+    isTranslationViewActive(runtimeContext.enabled, runtimeContext.viewMode)
   );
 }
 
@@ -106,6 +118,7 @@ async function queueRecord(record: BlockRecord): Promise<void> {
       blocks: [payload]
     } satisfies RuntimeMessage);
   } catch {
+    contextInvalidated = true;
     record.status = "failed";
   }
 }
@@ -357,7 +370,7 @@ function attachShortcutListener(): void {
         viewMode: nextViewMode
       } satisfies RuntimeMessage);
     } catch {
-      // Extension context invalidated after reload — ignore.
+      contextInvalidated = true;
     }
   };
 
@@ -417,7 +430,7 @@ async function bootstrap(): Promise<void> {
       host: location.hostname
     } satisfies RuntimeMessage)) as RuntimeContext;
   } catch {
-    // Extension context invalidated (e.g. after extension reload) — bail out.
+    contextInvalidated = true;
     return;
   }
 
