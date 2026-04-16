@@ -50,8 +50,17 @@ export function updateTranslatedText(
   element.classList.remove("lt-failed");
 }
 
-export function finalizeTranslatedText(element: HTMLElement): void {
-  const translatedText = getTranslatedLayer(element)?.textContent ?? "";
+export function finalizeTranslatedText(element: HTMLElement): boolean {
+  const translatedLayer = getTranslatedLayer(element);
+  if (!translatedLayer) {
+    return false;
+  }
+
+  const translatedText = translatedLayer.textContent ?? "";
+  if (!translatedText) {
+    return false;
+  }
+
   element.replaceChildren(element.ownerDocument.createTextNode(translatedText));
   element.classList.remove("has-translation", "is-translating", "lt-failed");
   element.classList.add("lt-done");
@@ -61,6 +70,7 @@ export function finalizeTranslatedText(element: HTMLElement): void {
   setTimeout(() => {
     element.classList.remove("lt-done");
   }, 650);
+  return true;
 }
 
 export function markTranslationFailed(element: HTMLElement): void {

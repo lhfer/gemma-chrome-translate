@@ -286,9 +286,14 @@ function handleTranslationCompleted(blockId: string, text: string): void {
 
   ensureTranslationShell(record.element);
   updateTranslatedText(record.element, text);
-  finalizeTranslatedText(record.element);
-  record.translatedText = text;
-  record.status = "done";
+  const finalized = finalizeTranslatedText(record.element);
+  if (finalized) {
+    record.translatedText = text;
+    record.status = "done";
+  } else {
+    markTranslationFailed(record.element);
+    record.status = "failed";
+  }
 }
 
 function handleTranslationFailed(blockId: string): void {

@@ -41,8 +41,7 @@ const SKIP_SELECTOR = [
   "[role='search']",
   "[role='alert']",
   "[role='status']",
-  "[role='tooltip']",
-  "[aria-label]"
+  "[role='tooltip']"
 ].join(", ");
 
 // When no semantic root (<main>, <article>) exists, only extract these
