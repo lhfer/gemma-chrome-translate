@@ -3,8 +3,8 @@ import { normalizeSourceText } from "../shared/hash";
 const ORIGINAL_CLASS = "lt-original";
 const TRANSLATED_CLASS = "lt-translated";
 
-function getTranslatedLayer(element: HTMLElement): HTMLElement {
-  return element.querySelector<HTMLElement>(`.${TRANSLATED_CLASS}`) as HTMLElement;
+function getTranslatedLayer(element: HTMLElement): HTMLElement | null {
+  return element.querySelector<HTMLElement>(`.${TRANSLATED_CLASS}`);
 }
 
 export function ensureTranslationShell(element: HTMLElement): void {
@@ -42,6 +42,9 @@ export function updateTranslatedText(
     }
   }
   const translatedLayer = getTranslatedLayer(element);
+  if (!translatedLayer) {
+    return;
+  }
   translatedLayer.textContent = translatedText;
   element.classList.add("has-translation", "is-translating");
   element.classList.remove("lt-failed");

@@ -350,11 +350,15 @@ function attachShortcutListener(): void {
     const nextViewMode = getNextViewMode(runtimeContext.viewMode);
     applyViewModeLocally(nextViewMode);
 
-    await chrome.runtime.sendMessage({
-      type: "SET_TAB_VIEW_MODE",
-      host: location.hostname,
-      viewMode: nextViewMode
-    } satisfies RuntimeMessage);
+    try {
+      await chrome.runtime.sendMessage({
+        type: "SET_TAB_VIEW_MODE",
+        host: location.hostname,
+        viewMode: nextViewMode
+      } satisfies RuntimeMessage);
+    } catch {
+      // Extension context invalidated after reload — ignore.
+    }
   };
 
   window.addEventListener("keydown", (event) => {
@@ -407,10 +411,15 @@ function attachRouteListeners(): void {
 }
 
 async function bootstrap(): Promise<void> {
-  runtimeContext = (await chrome.runtime.sendMessage({
-    type: "GET_RUNTIME_CONTEXT",
-    host: location.hostname
-  } satisfies RuntimeMessage)) as RuntimeContext;
+  try {
+    runtimeContext = (await chrome.runtime.sendMessage({
+      type: "GET_RUNTIME_CONTEXT",
+      host: location.hostname
+    } satisfies RuntimeMessage)) as RuntimeContext;
+  } catch {
+    // Extension context invalidated (e.g. after extension reload) — bail out.
+    return;
+  }
 
   attachRuntimeMessageListener();
   attachMutationObserver();
